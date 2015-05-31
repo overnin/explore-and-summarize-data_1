@@ -1,0 +1,947 @@
+---
+title: "L6_Assignment_OlivierVernin"
+author: "Olivier Vernin"
+date: "1 May 2015"
+output: html_document
+---
+# White wine exploration by Olivier Vernin
+
+## Univariate plot section
+```{r, echo=FALSE}
+library(ggplot2)
+library(gridExtra)
+library(GGally)
+library(scales)
+library(dplyr)
+
+wqw <- read.csv("/Users/olivier/Desktop/Udacity/rstudio/assignment/wineQualityWhites.csv")
+```
+
+Number of rows in the dataset
+```{r, echo=FALSE}
+nrow(wqw)
+```
+
+List of variables in the dataset
+```{r, echo=FALSE}
+names(wqw)
+```
+
+Overall summary
+```{r, echo=FALSE}
+summary(wqw)
+```
+
+As very new to wine characteristic, I did some research on the variables name to understand their impact on wine taste.:
+
+The X is the anonymized unique ID of the wine, so let's make it as factor.
+```{r, echo=FALSE}
+wqw$X <- as.factor(wqw$X)
+```
+
+
+### Quality
+As our task is to indentify the chimical propoerties which influence the quality, let's lot at it first.
+
+```{r, echo=FALSE}
+summary(wqw$quality)
+```
+The minium of 3, maxium of 9 and 50% of the values between 5 and 6.
+
+```{r, echo=FALSE}
+ggplot(aes(x=quality), data=wqw) + geom_histogram(binwidth=1)
+```
+
+The distribution of the quality look kind of normal with a peak at 6. Quality values are very concentrate. Let's see which percentage of the sample each value represents.
+
+```{r, echo=FALSE}
+prop.table(table(wqw$quality))
+```
+
+Well that's around 45% of the wine with 6, nearly half of the sample. 6 seems like a very average value. The sum of 5, 4 and 3 account for around 33%. The sum of 7,8 and 9 account for around 22%. Seems that we could use those group to categorize our wines. From 3 to 5 will be the *low* quality wines. 6 the *average* quality. And 7 to 9 the *high* quality.
+
+```{r, echo=FALSE}
+wqw$quality.group <- cut(wqw$quality, labels=c('low', 'average', 'high'), breaks=c(0, 5, 6, 10))
+```
+
+### Fixed Acidity (g/L)
+Fixed acidity is indicate as tartaric acid in the data description. Tartaric acid is a distinctive molecule. However [this online resource](http://waterhouse.ucdavis.edu/whats-in-wine/fixed-acidity) indicates that *fixed acid*, it's a class of acid which include tartaric acid and citric acid. 
+
+Let's see some stats first
+```{r, echo=FALSE}
+summary(wqw$fixed.acidity)
+```
+
+The majority of the wine have between 6.3 and 7.3. There is some high outliners at 14.2. The measurment seems to have a 0.1 precision.
+
+```{r, warning=FALSE, echo=FALSE}
+ggplot(aes(x=fixed.acidity), 
+       data=subset(wqw, fixed.acidity < quantile(fixed.acidity, .99))) +
+  geom_histogram(binwidth=.1)
+```
+
+For the fixed acidity we have a normal distribution.
+
+### Volatile Acidity (g/L)
+From online research, volatile.acidity is the steam of distillable acids. Note that the US legal limit is 1.1 g/L. I assume that our data are in g/L. It is normaly not detectable up to 3g/L.
+
+Let's get some stats
+```{r, echo=FALSE}
+summary(wqw$volatile.acidity)
+```
+
+Most of the values are between 0.21 and 0.32. Again some pretty hight outliers at 1.1 (which is exaclty the US legal limit). Looking at some data it seems that the precision is 0.01
+
+```{r, echo=FALSE, warning=FALSE}
+ggplot(aes(x=volatile.acidity), 
+       data=subset(wqw, volatile.acidity < quantile(volatile.acidity, .99))) + 
+  geom_histogram(binwidth=.01) 
+```
+
+The shape of the volatile acidity is approaching normal distribution. However there are many mini drops in the distribution. Let's use a smaller binwidth of 0.005.
+
+```{r, echo=FALSE, warning=FALSE}
+ggplot(aes(x=volatile.acidity), 
+       data=subset(wqw, volatile.acidity < quantile(volatile.acidity, .99))) + 
+  geom_histogram(binwidth=.005) 
+```
+
+I have the impression that the sampling of the measurment machine was not properly done. We get many 0.0X precision and very few 0.0X5 precision. I will adopt a 0.01 bin size to smooth the plot.
+
+### Citric Acid (g/L)
+From my internet search citric acid is contributing to the fixed acidity. It' is usualy present between 0 to 0.5g/L in wine.
+
+Let's get a finer grain bin size
+```{r, echo=FALSE}
+summary(wqw$citric.acid)
+```
+
+Most of the values are between 0.27 and 0.39. Again high outliners are present with 4 time the concentration toping at 1.66. A binwidth of 0.01 seems adapted.
+
+```{r, echo=FALSE, warning=FALSE}
+ggplot(aes(x=citric.acid), data=wqw) +
+  geom_histogram(binwidth=.01)
+```
+
+Most of the citric acid concentration are following a normal distribution with a peak at 0.3g/L. Again a few outliners at 1.25g/L and 1.7g/L. Note two very non-normal peaks at around .5 and .75.
+
+Let's look at the exact counts at those 2 strange peaks.
+```{r, echo=FALSE}
+table(subset(wqw, citric.acid == .49 | citric.acid == .74)$citric.acid)
+```
+
+There is: 
+- 215 wines at 0.49g/L
+- 41 wines at 0.74g/L
+
+Instinctively, it seems the result of a carefully controlled additive to the wine. Indeed citric acid [can be used to boost acidity and add "freshness"](http://en.wikipedia.org/wiki/Acids_in_wine#Citric_acid). But one shouldn't add too much otherwise as the it adds a strong citric flavor.
+
+Let's create a categorical variable for those value of citric acid.
+
+```{r, echo=FALSE}
+wqw$added.citric.acid <- ifelse(wqw$citric.acid == .49 | wqw$citric.acid ==.74, 'yes', 'no')
+```
+
+### Residual Sugar (g/L)
+The residual sugar that was not transformed during frementation in g/L.
+
+```{r, echo=FALSE}
+summary(wqw$residual.sugar)
+```
+Most of the bottles are between 1.7 and 9.9. Seems to have very high ouliners again 65. It seems that 0.1 would be a right binwidth.
+
+```{r, echo=FALSE, warning=FALSE}
+ggplot(aes(x=residual.sugar), 
+       data=subset(wqw, residual.sugar < quantile(residual.sugar, .99))) + 
+  geom_histogram(binwidth=0.1) 
+```
+
+Let see if we can get a normal distributon by taking the sqrt of the residual sugar.
+```{r, echo=FALSE}
+ggplot(aes(x=sqrt(residual.sugar)), 
+       data=subset(wqw, residual.sugar < quantile(residual.sugar, .99))) + 
+  geom_histogram(binwidth=0.1) 
+```
+
+Well not very convincing... Let see with log10 of the residual sugar.
+
+```{r, echo=FALSE}
+ggplot(aes(x=log10(residual.sugar)), 
+       data=subset(wqw, residual.sugar < quantile(residual.sugar, .99))) + 
+  geom_histogram(binwidth=0.1) 
+```
+
+Seems a bit better, we get a bimodale normal distribution. 
+
+#### Wine Sweetness
+
+As describe on [the wikipedia page](http://en.wikipedia.org/wiki/Sweetness_of_wine), there are categories of wine regarding sweetness.
+- dry up to 4g/L (can go up to 9g/L if balanced wit acidity)
+- medium dry up to 12g/L (can go up to 18g/L if balanced wit acidity)
+- medium up to 45g/L
+- sweet more than 45 g/L
+
+```{r, echo=FALSE, warning=FALSE}
+ggplot(aes(x=residual.sugar), 
+       data=wqw) + 
+  geom_histogram(binwidth=0.1) +
+  scale_x_continuous(breaks=c(4, 12, 45))
+```
+
+It seems that we have a majority of dry wines... let's create a factor variable.
+
+```{r, echo=FALSE}
+wqw$sweetness <- cut(wqw$residual.sugar, labels=c('dry', 'medium dry', 'medium', 'sweet'), breaks=c(0, 4, 12, 45, 500))
+```
+
+```{r, echo=FALSE}
+prop.table(table(wqw$sweetness))
+```
+
+The majority of our wines are either *dry* or *medium dry*. A fith of the bottles are *medium* wines. Only one bottle is a *sweet* wine.
+
+### Chlorides (g/L)
+The amount of salt in the wine in g/L.
+
+```{r, echo=FALSE}
+summary(wqw$chlorides)
+```
+
+Majority of the concentration are between 0.036 to 0.05. Again some very high outliers. It seems like 0.001 would be appropriate bin. Let's also remove 1% of the outlisers.
+
+```{r, echo=FALSE, warning=FALSE}
+ggplot(aes(x=chlorides), 
+       data=subset(wqw, chlorides < quantile(chlorides,.99))) + 
+  geom_histogram(binwidth=.001) 
+```
+
+The graph is following a normal distribution between 0.009 to 0.069. However we have  a kind of long tail from 0.08 up to 0.16. 
+
+Let's try without the 3% highest values.
+```{r, echo=FALSE, warning=FALSE}
+ggplot(aes(x=chlorides), 
+       data=subset(wqw, chlorides < quantile(chlorides,.97))) + 
+  geom_histogram(binwidth=.001) 
+```
+
+The distribution seems bimodale.
+
+### Free Sulfur Dioxide (mg/L)
+Free sulfur dioxide represent the free molecule of S02 in mg/dm^3 and work as a preservative. This molecule is easily detectable above 50ppm.
+
+```{r, echo=FALSE}
+summary(wqw$free.sulfur.dioxide)
+```
+
+Most of the values are between 23 and 46. Again at least one high outlier again at 289. A binwidth of 1 seems appropriate. 
+
+```{r, echo=FALSE}
+ggplot(aes(x=free.sulfur.dioxide), 
+       data=subset(wqw, free.sulfur.dioxide < quantile(free.sulfur.dioxide, .99))) + geom_histogram(binwidth=1) 
+```
+
+The distribution has a quite flat-ish normal shape.
+
+### Total Sulfure Dioxide (mg/L)
+A total amound of S02 in mg/dm^3. It include the free sulfure dioxide. 
+
+```{r, echo=FALSE}
+summary(wqw$total.sulfur.dioxide)
+```
+
+The majority of the values are between 108 and 167. It seems that we get high and low outliers. A binwith of 1 seems appropriate.
+
+```{r, echo=FALSE}
+ggplot(aes(x=total.sulfur.dioxide), 
+       data=subset(wqw, total.sulfur.dioxide < quantile(total.sulfur.dioxide, .99) &
+                     total.sulfur.dioxide > quantile(total.sulfur.dioxide, .01))) + 
+  geom_histogram(binwidth=1) 
+```
+
+The data distribution has a lot of noise. A wider bin would attenuate this noise.
+
+```{r, warning=FALSE, echo=FALSE}
+ggplot(aes(x=total.sulfur.dioxide), 
+       data=subset(wqw, total.sulfur.dioxide < quantile(total.sulfur.dioxide, .99) &
+                     total.sulfur.dioxide > quantile(total.sulfur.dioxide, .01))) +
+  geom_histogram(binwidth=3)
+```
+
+### Additional note on Total Sulfur Dioxide and the "Contains sulfites" indication
+As often one see "contain sulfites" on wine bottle because less than 1% of the population is sulfit-sensitive. The label must be present with concentration higher than 10ppm. In the US the maximum authorized is 350ppm. It is also used as a measure for organic wine with maximum of 100ppm. [Read more here.](http://waterhouse.ucdavis.edu/whats-in-wine/sulfites-in-wine)
+
+For liquide 1mg/L approximate of 1ppm. So if we want to represent those thresold on the graphe.
+
+```{r, echo=FALSE, warning=FALSE}
+ggplot(aes(x=total.sulfur.dioxide), 
+       data=wqw) +
+  geom_histogram(binwidth=3) +
+  scale_x_continuous(breaks=c(10,100,350))
+```
+
+It seems that all our white wines would have display in the "Contains Sulfites". Still a portion of them could be consider are organic. 2 wines of our sample would not be authorized in the US.
+
+Apparently this 10ppm thresold is health issue than anything to do with wine quality but still let's create a new variable contains.sulfies with 3 groups less than 10, between 10 and 100 and more than 100
+
+```{r, echo=FALSE}
+wqw$contains.sulfites <- cut(wqw$total.sulfur.dioxide, labels=c('no', 'negligable', 'low', 'normal', 'high'), breaks=c(0, 1, 10, 100, 350, 800))
+```
+
+```{r, echo=FALSE}
+prop.table(table(wqw$contains.sulfites))
+```
+Our sample contains:
+- 81% of normal sulfite wine
+- 19% of low sulfite wine
+- 0.04% of negligable and high sulfites wine
+- none with no sulfite
+
+### Ratio Free Sulfur Dioxide and Total Sulfur Dioxide
+According to [the practical winemaker journal](http://www.practicalwinery.com/janfeb09/page2.htm) the ratio between free SO2 and total S02 is key for the preservation of the wine. So let's explore this ratio
+
+```{r, echo=FALSE, warning=FALSE}
+ggplot(aes(x=free.sulfur.dioxide/total.sulfur.dioxide), data=wqw) +
+  geom_histogram(binwidth=0.01)
+```
+
+We get a normal distribution of the ratio. Most of the values are contain between 10% to 40% 
+
+The article also mention that *For dry table wines the level of free sulfur is usually somewhere around 40% to 75% of the level of total SO2*. Well let's cross check with our sample.
+
+```{r, echo=FALSE, warning=FALSE}
+ggplot(aes(x=free.sulfur.dioxide/total.sulfur.dioxide), 
+       data=subset(wqw, sweetness == 'dry')) +
+  geom_histogram(binwidth=0.01) +
+  scale_x_continuous(breaks=c(.4,.75))
+```
+
+Very few of our dry wine sample are contained in 40% to 75% ratio. Most of our wine are below 40%. After reading multiple time and double checking my variables and the article, i cannot figure out how our sample ratio is so different.
+
+As this ratio seems important into wine conservation, let's add it as a variable keeping in mind that we couldn't really validate our values.
+```{r, echo=FALSE}
+wqw$ratio.sulfur.dioxide <- wqw$free.sulfur.dioxide/wqw$total.sulfur.dioxide
+```
+
+### Density (g/cm^3)
+The density of the wine. The reference is the density of water equal to 1. 
+
+```{r, echo=FALSE}
+summary(wqw$density)
+```
+
+Most of the values are between 0.9917 and 0.9961. Not very sure how far are the outliers. Let's choose a binwidth of 0.0001.
+```{r, echo=FALSE, warning=FALSE}
+ggplot(aes(x=density), 
+       data=subset(wqw, density < quantile(density,.99))) + 
+  geom_histogram(binwidth=.0001) 
+```
+
+The density distribution seems normal and trimodal with peaks approximatively at 0.992, 0.996 and 0.998.
+
+### pH
+pH ss a indicator of how acidic or basic the wine is.
+
+Let see the stats of the pH. 
+```{r, echo=FALSE}
+summary(wqw$pH)
+```
+
+The mean 3.188 and median 3.180 are nearly indentical. So all our white wine are acidic with value between 2.7 and 3.8. Seems that there is a 0.01 precision on the measurements. No real outliers here.
+
+```{r, echo=FALSE}
+ggplot(aes(x=pH), data=wqw) + geom_histogram(binwidth=0.01) 
+```
+
+The pH seems to follow normal distribution.
+
+### Sulphates (g/L)
+Sulphates (or potassium solphate) are a wine additive for antimicrobial and antioxidant. It [can also be use as fertilizer](http://www.solufeed.co.uk/solufeed-news/articles/2013/august/foliar-potassium-enhances-wine-quality.aspx).
+
+Let's look at the stats
+```{r, echo=FALSE}
+summary(wqw$sulphates)
+```
+
+Most values lies between 0.41g/L and 0.55g/L. Seems like a 0.01 would fit our bin size. No realy clear outliers here.
+
+```{r, echo=FALSE, warning=FALSE}
+ggplot(aes(x=sulphates), data=wqw) + geom_histogram(binwidth=0.01) 
+```
+
+The data curve is kind of normal and bimodal. From the table we can find a peak at 0.38 and at 0.5. We can also more cleary spoted some outliner above 1.0g/L
+
+### Alcohol (%)
+Alcohol is quite self explanatory... as a percentage per volume. 11.6% is consider as a global average.
+
+Let look at the stats
+```{r, echo=FALSE}
+summary(wqw$alcohol)
+```
+
+Mose of the values are between 9.5% and 11.4%. 0.1 seems like a good binwidth. No real outliers.
+
+```{r, echo=FALSE, warning=FALSE}
+ggplot(aes(x=alcohol), data=wqw) + geom_histogram(binwidth=0.1) 
+```
+
+The distribution seems rather normal-ish as average perspective. But the curve is pretty noisy. It also seems ot have 3 different groups. A low alcohol group below 10%, a medium group between 10.5% and 11.5% and a high alcohol group above 12%.
+
+## Univariate Analysis
+
+### What is the structure of the dataset?
+There are 4,898 white wines in the dataset with 13 variables: 
+- X
+- fixed.acidity
+- volatile.acidity
+- citric.acid
+- residual.sugar 
+- chlorides
+- free.sulfur.dioxide
+- total.sulfur.dioxide
+- density
+- pH
+- sulphates
+- alcohol
+- quality
+
+Main observations:
+- 45% of the wines have quality of 6.
+- All our wine are acidic with pH mean at 3.188.
+- The majority of the wines are dry 43% and medium dry 40%.
+- 81% of the wines contain between 100ppm and 350ppm of sulfite. One wine contains more than 350ppm of sulfites and would not be allowed to be sold in the US.
+- Citric acid seems to have been added in some bottle to reach 2 different concentrations levels 0.49g/L and 74g/L. 
+- Our ratio of free.sulfure.dioxide over total.sulfure.dioxide is not matching data average found online.
+- The alcohol concentration seems to crafted to match different consumer tastes. 
+
+### What is/are the main feature(s) of interest in your dataset?
+
+The most important feature is the quality. For the rest of the features, it's not easy at this stage to clearly identify which one is really important. A good wine is a well balanced composition that doesn't seems connected one particular chimical components. 
+
+### What other features in the dataset do you think will help support your investigation into your feature(s) of interest?
+
+Still difficult to indentify which feature will help, but the density, the alcohol and suflur dioxine, volatile acidity (the vinager taste) might be more helpful.
+
+### Did you create any new variables from existing variables in the dataset?
+
+I created 3 categorical variables and 1 continious variable. 
+
+The first categorical is **sweetness**. The residual.sugar has been used to categorize the wines.
+- *dry* up to 4g/L 
+- *medium dry* up to 12g/L 
+- *medium* up to 45g/L
+- *sweet* more than 45 g/L
+
+The second categorical is **contains.sulfites**. It's more a reglementation mark than any taste category but it could be interesting. 
+- *negligable* up to 10ppm
+- *low* up to 100ppm
+- *high* above 100ppm
+
+The third categorical is **add.citric.acid**. A boolean to mark the wine with an non-normal concentration of citric acid.
+
+The continious varible is **ratio.sulfur.dioxide**, the ratio of free.sulfur.dioxide over the total.sulfur.diovide.
+
+### Of the features you investigated, were there any unusual distributions? Did you perform any operations on the data to tidy, adjust, or change the form of the data? If so, why did you do this?
+
+The residual sugar had a kind of long tail distribution. By doing a log10 transformation it became a bimodal normal distribution. I didn't changed the value but will keep in mind this property of the distribution.
+
+_________________
+
+## Bivariate Plots Section
+
+### Scatter Plot Matrix
+
+```{r, fig.height=30, fig.width=30, warning=FALSE, echo=FALSE}
+set.seed(231)
+sample.ids <- sample(levels(wqw$X), 2000)
+ggpairs(subset(wqw, X %in% sample.ids )[,2:12], 
+        upper=list(params=c(size=16)),
+        lower=list(continuous="smooth", params=c(colour="red", alpha=0.1))) + 
+  theme(axis.text = element_blank())
+```
+
+### Density vs Residual Sugar
+According to the matrix the density and residual.sugar have a strong correlation at 0.83. Let's visualize in a scaterplot. 
+
+```{r, echo=FALSE}
+ggplot(aes(x=density, y=residual.sugar), 
+       data=wqw) + 
+  geom_point(alpha=.2)
+```
+
+It looks like a linear relastionship. 
+
+```{r, echo=FALSE}
+ggplot(aes(x=density, y=residual.sugar), 
+       data=subset(wqw, residual.sugar<30)) + 
+  geom_point(alpha=.5) +
+  geom_smooth(method="lm")
+```
+
+Well we have a strong relashionship and it definitly make sense. Indeed the more you add suggar in liquide, the more liquide will disolve the sugar and increase in density.
+
+### Alcohol vs Density
+A second strong correlation number is between the alcohol and the density with -0.78. Let's create a scater plot to explore this relationship.
+
+```{r, echo=FALSE}
+ggplot(aes(x=alcohol, y=density), 
+      data=subset(wqw, density < 1.01)) +
+  geom_jitter(alpha=.2)
+```
+
+```{r, echo=FALSE}
+ggplot(aes(x=alcohol, y=density), 
+      data=subset(wqw, density < 1.01)) +
+  geom_jitter(alpha=.2) +
+  geom_smooth(method="lm")
+```
+
+The alcohol and density seem to follow a linear relationship. Which make definitly sense as the density of alcohol is lower than the water ( which is 1). The more concentrate in alcohol the more the density is going down.
+
+### Total Sulfur Dioxide vs Density
+A third correlation number is a moderate 0.53 between the total sulfur dioxide and the density.
+
+```{r, echo=FALSE}
+ggplot(aes(x=total.sulfur.dioxide, y=density), 
+      data=subset(wqw, density < 1.01)) +
+  geom_jitter(alpha=.2)
+```
+
+The scater plot is not very convincing. It looks like a small correlation relationship.
+
+### Total Sulfur Dioxide vs Residual Sugar
+Between the total sulfur dioxide and the residual sugar, there is correlation moderate coefficient of 0.47. Let's have a closer look.
+
+```{r, echo=FALSE}
+ggplot(aes(x=total.sulfur.dioxide, y=log10(residual.sugar)), 
+      data=subset(wqw, residual.sugar < quantile(residual.sugar, .99))) +
+  geom_jitter(alpha=.2)
+```
+
+A bit confusing to get any information from this graph. An additional variable might be usefull here.
+
+### Alcohol vs Quality
+A positive moderate correlation number of 0.43 was spotted in the matric between the quality and the level of alcohol.
+
+```{r, echo=FALSE}
+ggplot(aes(x=as.factor(quality), y=alcohol), data=wqw) + 
+  geom_boxplot()
+```
+
+Look like the good wine of our sample have more alcohol. In average higher quality wines contain more alcohol than the average wines. Note that the average wine quality have a lower alcohol than the worst wine quality. 
+
+### pH vs Fixed Acidity
+Another moderate negative correlation number of -0.45 between the pH and the fixed acidity.
+
+```{r, echo=FALSE}
+ggplot(aes(x=pH, y=fixed.acidity), 
+       data=wqw) + 
+  geom_jitter(alpha=.2) +
+  geom_smooth(method='lm')
+```
+
+We clearly see that the more fixed acidity the lower the pH. This makes totally sense as the low pH is more acid. 
+
+### Total Sulfure Dioxide vs Free Sulfure Dioxide
+The total and the free sulfure dioxides have a correlation coefficient of 0.61. Let's investigate more.
+
+```{r, echo=FALSE}
+ggplot(aes(x=total.sulfur.dioxide, y=free.sulfur.dioxide), data=wqw) + 
+  geom_point(alpha=.2) +
+  coord_cartesian(xlim=c(0,300)) +
+  geom_smooth(method='lm')
+```
+
+The relationship look linear. Which in a way make sense as free sulfure dioxide is part of the total sulfure dioxide. Let's now plot the relationship between the total - fee vs free.
+
+```{r, echo=FALSE}
+ggplot(aes(x=total.sulfur.dioxide - free.sulfur.dioxide, y=free.sulfur.dioxide), data=wqw) + 
+  geom_point(alpha=.2) +
+  coord_cartesian(xlim=c(0,300)) +
+  geom_smooth(method='lm')
+```
+
+Well not very conclusive, we arrive at a rather low correlation shape.
+
+```{r, echo=FALSE}
+cor.test(x = wqw$total.sulfur.dioxide - wqw$free.sulfur.dioxide,
+         y = wqw$free.sulfur.dioxide)
+```
+
+Only a weak 0.26 correlation coefficient.
+
+### Ratio Sulfur Dioxide vs pH
+I read that the ratio sulfur dioxide influence the pH. Let's check if we get something....
+
+```{r, echo=FALSE}
+ggplot(aes(x=pH, y=ratio.sulfur.dioxide), data=wqw) + 
+  geom_point(alpha=.2)
+```
+
+Well it look like a correlation of 0... Definitly no related. 
+
+### pH vs Quality
+Let's compare pH in different quality
+
+```{r, warning=FALSE, echo=FALSE}
+ggplot(aes(x=as.factor(quality), y=pH), data=wqw) + 
+   geom_boxplot()
+```
+
+The very best wines have a very controlled/narrowed pH. As opposed as the worst wines that are more spread and lower -more acidic- pH. There is much more outliners for average wines quality (5 and 6) but those are the vast majority of our sample. The quality 5 has the lowest mean of pH.
+
+### Chlorides vs Quality
+Chloride (or salt) is a great taste enhancer, let see the relationship with quality
+
+```{r, warning=FALSE, echo=FALSE}
+ggplot(aes(x=as.factor(quality), y=chlorides), data=wqw) + 
+   geom_boxplot()
+```
+
+Well best wines don't have a low level of clorine and again the biggest quality. We can spot again many outliners for the quality 5 and 6. Let's try to get more details.
+
+```{r, warning=FALSE, echo=FALSE}
+ggplot(aes(x=as.factor(quality), y=chlorides), data=wqw) + 
+  geom_boxplot() +
+  coord_cartesian(ylim=c(.01, .075))
+```
+
+The better the wine, the lower the chloride level. Except for the worst wines (graded 3 and 4), are those not even worth a bit of chloride?
+
+### Volatile Acidity vs Quality
+Too much volatile acidity is supposed to produce the vinager smell of the wine. Let's see if the worst wine are the one with a vinager smell 
+
+```{r, echo=FALSE}
+ggplot(aes(x=as.factor(quality), y=volatile.acidity), data=wqw) + 
+  geom_boxplot() 
+```
+
+Actually the worst wines (quality 3) don't have the highest level of volatile acidity. However the wines of quality 4 have the highest average concentration and a few high outliners.  
+
+### Density vs Quality
+Let's compare density in different quality groups
+
+```{r, warning=FALSE, echo=FALSE}
+ggplot(aes(x=as.factor(quality), y=density), data=wqw) + 
+  geom_boxplot() +
+  coord_cartesian(ylim = c(.985, 1))  
+```
+
+The best wines (quality 7, 8 and 9) have in average a lower density.
+
+```{r, echo=FALSE}
+ggplot(aes(x=quality, y=density), data=wqw) + 
+  geom_jitter(alpha=.1) +
+  coord_cartesian(ylim = c(.985, 1))  
+```
+
+### Total Sulfur Dioxide vs Quality
+Let's compare total sulfur dioxide according to quality groups
+
+```{r, echo=FALSE}
+ggplot(aes(x=as.factor(quality), y=total.sulfur.dioxide), data=wqw) + 
+   geom_boxplot() 
+```
+
+Intersting plot as the better the quality the more narrow the variation of total sulfur dioxide. It's as if the best wine producers are more in control of the sulfur dioxide and don't let it variate much.
+
+### Citric Acid (and non-normal citric acid) vs Quality
+Let see if the wine with those non-normal levels of citric acid are rated in quality.
+
+```{r, warning=FALSE, echo=FALSE}
+ggplot(aes(x=as.factor(quality), y=citric.acid), data=wqw) + 
+  geom_jitter(aes(color=added.citric.acid), alpha=.2) +
+  coord_cartesian(ylim=c(0,1))
+```
+
+```{r, warning=FALSE, echo=FALSE}
+ggplot(aes(x=citric.acid), data=wqw) + 
+  geom_histogram(binwidth=.01) +
+  facet_wrap(~ quality, scales='free')
+```
+
+Well the non normal concentration for qualities 4, 5, 6 and 7. For 3, 8 and 9 you cannot spot a peak at 0.49 and 0.74. 
+
+Let's look a those peaks by computing the percentage of bottles in each quality which clearly have additional citric acid.
+
+```{r, echo=FALSE, warning=FALSE}
+wqw.citric_acid_proportion <- wqw %>%
+  group_by(quality, citric.acid) %>%
+  summarise(n=n()) %>%
+  mutate(prop=n/sum(n)) %>%
+  ungroup()
+
+ggplot(aes(x=quality), 
+       data=subset(wqw.citric_acid_proportion, citric.acid==.49 | citric.acid==.74)) + 
+  geom_histogram(aes(y=prop), stat="identity") + 
+  scale_y_continuous(labels=percent_format()) +
+  facet_wrap(~ citric.acid)
+```
+
+Seems that at least 20% of the best wine quality 9 are suspircious of adding citric.acid. The other quality groups are more around 3% to 6%. The small quantity of quality 9 bottles (0.1%) might explain this very high percentage. Indeed only 1 unlucky bottles at 0.49 citric acid would make this 20%.
+
+
+## Bivariate Analysis
+
+### Talk about some of the relationships you observed in this part of the investigation. How did the feature(s) of interest vary with other features in the dataset?
+On one hand two features have a positive effect on the density the sugar and total suflure dioxide. On the other hand the alcohol has a negative effect on the density. 
+
+The best white wines have a low density and high alcohol. Therefor a wine producer should maximise the fermentation to consume most of the residual sugar to make as much alcohol a possible. 
+
+The free and total sulfure dioxides were correlated because the later is containing all of them. The difference between the total and the free sulfure dioxides is called [*bound sulfure dioxide*](http://www.practicalwinery.com/janfeb09/page2.htm). In our sample the bound and free sulfure dioxide only have a weak (0.26) correlation coefficient.  
+
+### Did you observe any interesting relationships between the other features (not the main feature(s) of interest)?
+The total sulfur dioxide and pH variation on quality seem to tell the story that the wine producer who make better wine are more in control of the sulfure dioxide or the pH.
+
+### What was the strongest relationship you found?
+The strongest relationship was between the density and residual sugar. The density is strongly positively correlated with the residual sugar. An also strong negative correlation exist between the alcohol and the density.
+
+___________
+
+## Multivariate Plots
+
+### Exploring Density vs Residual Sugar vs Alcohol
+As exposed in the bivariate plots about the relationship betwee density, residual.sugar and alcohol. Let's get a better feeling of it.
+```{r, echo=FALSE}
+ggplot(aes(x=density, y=residual.sugar, color=alcohol), 
+       data=subset(wqw, density < quantile(density, .99))) + 
+  geom_jitter() +
+  scale_y_continuous(trans=log10_trans()) +
+  scale_colour_gradient2(low="blue", high="red", midpoint=11)
+```
+
+We can clearly see that for a given residual sugar with higher alcohol the density is lowering. When the residual sugar increase the alcohol is lower. 
+
+```{r, echo=FALSE}
+ggplot(aes(x=density, y=residual.sugar, color=alcohol), 
+       data=subset(wqw, density < quantile(density, .99))) + 
+  geom_jitter() +
+  scale_y_continuous(trans=log10_trans()) +
+  scale_colour_gradient2(low="blue", high="red", midpoint=11) +
+  facet_wrap(~ quality)
+```
+
+The better wine (7 to 9) have on average a lower residual sugar and higher alcohol concentration. The worst wine (3 to 5) don't produce a lot of alcohol. The average wines (6) has those 2 caracteristics.
+
+```{r, echo=FALSE}
+p1 <- ggplot(aes(x=density, y=residual.sugar, color=alcohol), 
+       data=subset(wqw, density < quantile(density, .99))) + 
+  geom_jitter() +
+  scale_y_continuous(trans=log10_trans()) +
+  scale_colour_gradient2(low="blue", high="red", midpoint=11) +
+  ggtitle("all wines")
+p2 <- ggplot(aes(x=density, y=residual.sugar, color=alcohol), 
+       data=subset(wqw, density < quantile(density, .99) & quality == 6)) + 
+  geom_jitter() +
+  scale_y_continuous(trans=log10_trans()) +
+  scale_colour_gradient2(low="blue", high="red", midpoint=11) +
+  ggtitle("quality 6 wines")
+grid.arrange(p1,p2)
+```
+
+The average wines (6) are a good subset to repesent those 2 characteristics.
+
+Let's have a look again at the total.sulfur.dioxide vs residual.sugar. Maybe by adding quality as color it would help us identify a pattern.
+
+```{r, echo=FALSE}
+ggplot(aes(x=total.sulfur.dioxide, y=log10(residual.sugar), color=quality), 
+      data=subset(wqw, residual.sugar < quantile(residual.sugar, .99))) +
+  scale_colour_discrete(h=c(0,360), h.start=100, l=50, direction=1) +
+  geom_jitter()
+```
+
+Well not really helpful ....
+
+### Exploring Sweetness
+As continuity with the previsou graphs, let's see how our sweetness variable can be used.
+```{r, echo=FALSE}
+ggplot(aes(x=density, y=alcohol, color=sweetness), data=wqw) + 
+   geom_jitter(alpha=.8)
+```
+
+I like this plot as it connect to my past experience with different wine sweetness.
+
+### Explore Total Sulfure Dioxide 
+```{r, echo=FALSE}
+ggplot(aes(x=density, y=total.sulfur.dioxide, color=alcohol), 
+       data=subset(wqw, 
+                   density < quantile(density, .99) &
+                   total.sulfur.dioxide < quantile(total.sulfur.dioxide, .99))) + 
+  scale_colour_gradient2(low="blue", high="red", midpoint=11) +
+  geom_jitter() 
+```
+
+We rathe see a relationship between density and alcohol on this previous plot.
+
+```{r, echo=FALSE}
+ggplot(aes(x=density, y=total.sulfur.dioxide, color=alcohol), 
+       data=subset(wqw, 
+                   density < quantile(density, .99) &
+                   total.sulfur.dioxide < quantile(total.sulfur.dioxide, .99))) + 
+  scale_colour_gradient2(low="blue", high="red", midpoint=11) +
+  geom_jitter() +
+  facet_wrap(~ quality)
+```
+
+Well those last two plots are not really helping us in our exploration. let's drop the suflur dioxide and look form the angle of the contains.sulfites variable
+
+### Explore Contains Suflites
+
+```{r, echo=FALSE}
+ggplot(aes(x=contains.sulfites, y=pH, color=as.factor(quality)), 
+       data=subset(wqw, fixed.acidity < quantile(fixed.acidity,.99))) + 
+  scale_colour_discrete(h=c(0,360), h.start=100, l=50, direction=1) +
+  geom_jitter(aplha=.5)
+```
+
+No really trend there all quality/pH are mixed within the different contains.sulfites categories.
+
+```{r, echo=FALSE}
+ggplot(aes(x=contains.sulfites, y=alcohol, color=as.factor(quality)), 
+       data=subset(wqw, fixed.acidity < quantile(fixed.acidity,.99))) + 
+  geom_boxplot(position="dodge") 
+```
+
+Well the only insight i get from this graph is that the low sulfites seems to be on average of higer alcohol. Let's go back to a simple boxplot.
+
+```{r, echo=FALSE}
+ggplot(aes(x=as.factor(quality), y=total.sulfur.dioxide), 
+       data=wqw) + 
+  geom_boxplot()
+```
+
+Back to square one with the understanding and visualisation of the suflure dioxide. I'm a bit clueless. Let's try with pH.
+
+```{r, echo=FALSE}
+ggplot(aes(x=pH, y=total.sulfur.dioxide), 
+       data=subset(wqw, density < quantile(density,.99))) + 
+  geom_jitter(alpha=.5) + 
+  facet_wrap(~ quality)
+```
+
+Seems like another dead end.
+
+### Exploring Chlorides
+
+In the bivariate analysis, the chlorides and the quality had a curved relationship. The higher the quality the lower the lower the chlorides concentration. Let's draw the quality vs the alcohol with the chlorides as color. The top and bottom 10% outliers of chloride are removed. 
+
+```{r, echo=FALSE}
+ggplot(aes(y=alcohol, color=chlorides, x=as.factor(quality)), 
+       data=subset(wqw, chlorides < quantile(chlorides,.9) &
+                     chlorides > quantile(chlorides,.1))) + 
+  geom_jitter() +
+  scale_colour_gradient2(name="Chlorides", low="blue", high="red", midpoint=0.043) 
+```
+
+Intersting view. We can still see that the lower the quality wine the higher the chlorides concentration. The graph gives a feeling that higher chlorides concentration is associated with lower alcohol precentage. However this is just an overall feeling, indeed quite a few wines with low chlorides have high alcohol precentage and the opposit is also true.
+
+Now let's look at the alcohol concentration from the chlorides and total sulfur dioxide variable.
+
+```{r, echo=FALSE}
+ggplot(aes(x=chlorides, y=total.sulfur.dioxide, color=alcohol), 
+       data=subset(wqw, 
+                   chlorides < quantile(chlorides, .97) &
+                   total.sulfur.dioxide < quantile(total.sulfur.dioxide, .99))) + 
+  scale_colour_gradient2(low="blue", high="red", midpoint=11) +
+  geom_jitter() 
+```
+
+Mmmm the 2 components are quite effective to increase the percentage of alcohol.
+
+
+## Multivariate Analysis
+
+### Talk about some of the relationships you observed in this part of the investigation. Were there features that strengthened each other in terms of looking at your feature(s) of interest?
+I was looking at "Which chemical properties influence the quality of white wines?".
+
+From my exploratory data analyse, it appears that the pH, the residual sugar, the density, chlorides and the alcohol can help us identify a good wine. The lower the residual sugar and the chlorides and the higer the pH, the density and the alcohol, the better the wine. 
+
+The alcohol concentration is a good approximation of the quality of the wine as it illustrates that the fermentation process was well done and very little residual sugar is left in the bottle.
+
+However a good wine appears to be the right balance of many chemical properties that prevent me to identify a linear model. 
+
+### Were there any interesting or surprising interactions between features?
+Regarding citric acid, it seem and additive commonly used accross all the quality of wines. I would have expect that good quality wine would not rely on such additive. Also i need to find a official confirmation but European Union might not allowed this additive. 
+
+### OPTIONAL: Did you create any models with your dataset? Discuss the strengths and limitations of your model.
+No i fail to identify or transform my variables to support a linear model.
+
+______________
+
+## Final Plots and Summary
+
+### Plot One
+```{r, echo=FALSE}
+ggplot(aes(x=density, y=alcohol, color=sweetness), 
+       data=subset(wqw, density < quantile(density,.99))) + 
+  geom_jitter(alpha=.1) +
+  xlab("Density (g/cm^3)") +
+  ylab("Alcohol (%)") + 
+  scale_color_discrete(name="Sweetness") +
+  geom_vline(xintercept=1, linetype="dotted") +
+  ggtitle("Wine Alcohol vs Density by Sweetness") +
+  geom_smooth(method="lm")
+```
+
+#### Description One
+This plot is a scaterplot representing density vs alcohol with as color the wine sweetness categories. The sweetness category has been choosed over residual sugar as a more familiar label for the wine comsumer. The data set only contains three sweetness categories: *dry*, *medium dry* and *medium*. A doted line at density of 1 is marking the water reference point. The points have been made almost tranparent in order to avoid overplotting and keep visible the linear regressions of each sweetness category.
+
+One can clearly see almost parallele lines of the the dry and medium dry wines. The lines seem to converge outside the graph as alcohol would increase. The medium wine line is a bit more uncertain and short but it seems to follow the same patern to convertn with the two others. A reason of shortness of the medium wines is due to our sample that only contains 16% of them against more than 40% for each dry and medium dry wines. This projected convergence makes sense as the more alcohol the less room for other composants, therefore the density would ultimatly converge.  
+
+It is interesting to see that for a given concentration of alcohol the dry wines have a lower density than the medium dry wine; and those medium dry would have a lower density than the medium wines. Therefor when chosing a wine in the store, one could eventually estimate the density of the wine by looking at the sweetness category and the precentage of alcohol.
+
+### Plot Two
+```{r, echo=FALSE}
+wqw.citric_acid_proportion <- wqw %>%
+  group_by(quality, citric.acid) %>%
+  summarise(n=n()) %>%
+  mutate(prop=n/sum(n)) %>%
+  ungroup()
+
+ggplot(aes(x=quality), 
+       data=subset(wqw.citric_acid_proportion, citric.acid==.49 | citric.acid==.74)) + 
+  geom_histogram(aes(y=prop), stat="identity", fill='#AA3939') + 
+  scale_y_continuous(labels=percent_format()) +
+  facet_wrap(~ citric.acid) +
+  ylab("Percentage of wines in each quality group") +
+  ggtitle("Proportion of wine bottles\n with citric acid suspicious concentrations (0.49g/L and 0.74g/L) vs quality")
+```
+
+#### Description Two
+This second plot shows the respective suspicious concentration of citric acid at 0.49g/L and 0.74g/L. The usage of acid citric as additive in wine is sticlty reglemented by the EU. [Portugal's Vino Verde region is in Zone C 1](http://eur-lex.europa.eu/LexUriServ/LexUriServ.do?uri=OJ:L:2008:148:0001:0061:EN:PDF) where it's [only allowed to use this additive for exceptional years](http://homepages.inf.ed.ac.uk/vgalpin1/ps/vgalpin-cwm-print.pdf).
+
+The 0.49g/L and 0.74g/L concentrations were identified as "suspicious" because the otherwise normal distribution of citric acid is making significant peaks for those values. As citric acid is a taste enhancer, it is usually be added to give more freshness. 
+
+What is striking is that 1 over 5 bottle of the quality 9 wines have a suspicious concentration of 0.49. For other qualities, in average 1 bottle every 20 can be considered as suspicious. Note also that none of the quality 3 wines have those suspicious concentrations. The peak of quality 9 wines can find an explanation in the small number of such wine in the dataset, the 20% is only 1 bottle of quality 9. 
+The year of production is missing in order to identify if the addition of citric acid was legal or not.
+
+### Plot Three
+```{r, echo=FALSE}
+ggplot(aes(x=chlorides, y=total.sulfur.dioxide, color=alcohol), 
+       data=subset(wqw, 
+                   chlorides < quantile(chlorides, .97) &
+                   total.sulfur.dioxide < quantile(total.sulfur.dioxide, .99))) + 
+  scale_colour_gradient2(low="blue", high="red", midpoint=11, name='Alcohol (%)') +
+  geom_jitter(alpha=.8) +
+  xlab("Chlorides (g/L)") + 
+  ylab("Total Sulfur Dioxide (g/L)") +
+  ggtitle("Chlorides vs Total Sulfur Dioxide impact on Alcohol concentration")
+```
+
+#### Description Three
+This third plot illustrates the impact of chlorides vs total suflur dioxide on the alcohol concentration. The higher level of alcohol above 11% are mainly achieved with lower concentration of both components. When the concentartion of clorides increase above 0.05 g/L most of the wine have a lower than 11% percentage of alcohol. Same lower alcohol precentage for a conentration of total sulfur dioxide above 150 g/L. 
+
+Considering that both sodium and suflur dioxide are key components for the fermentation process, it's interesting to see that an excess of both of them could be associate with lower alcohol concentration. Indeed chlorides [can improve the fermentation](https://www.google.fr/webhp?sourceid=chrome-instant&ion=1&espv=2&ie=UTF-8#q=origin%20sodium%20chlorides%20in%20wine) while without suflur dioxide there would be no fermentation at all.  
+
+
+## Reflection
+The exercise during the Udacity lessons 3 was much easier than figuring out a direction without guidance for this project. One has to go step by step. Even with a resonable number of variables (around 17 here) it was very difficult for me not to get lost. I had to move back and forth on this report to correct wrong conclusions or move plots from the univariate section to the bivariate or trivariate section. 
+
+Another big source of struggle was to match the dataset's variable with other information that i could find online. The names *sulfates* or *sulfure* or *sulfite* were a greate source of confusion. To add to the naming confusion some online searches provided very different averages for example with the ratio.sulfure.dioxide. After reading multiple sources online and coming back to the dataset description i slowly learnt the different componants but still i'm a bit puzzled with the difference in average.
+
+The little success was to discover something that i already know (relationship between sugar, density and alcohol) but mostly the success feeling came when i selected the right graph for my purpose. I easily got suck in the analyze with certain type of graph. For example i couldn't find a way out with scater plot and histogram until i got the idea of using a boxplots which made a lot of relationships clearer. I also liked to add sweetness as a variable which helped me connect with the subject.
+
+The next steps for further analyzes would be to 
+- understand better the frementation process. The reactions between the pH, the total and the free sulfur dioxide at a chimical level seems especially important to later study their relashionship.
+- study the red wine data set and get a feeling and illustrate/vizualize the differences. 
+- use the another white wine dataset from another region of Portual (or Europe).
+- add to the current dataset a price variable. It can be only price range indication in order to maintain the privacy of the data.
